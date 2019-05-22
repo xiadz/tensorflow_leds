@@ -1,2 +1,5 @@
 .*.swp
 tfcache
+
+sorted_correlations.csv
+raw_nn_outputs.csv

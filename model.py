@@ -12,6 +12,10 @@ import time
 ARDUINO_DEVICE="/dev/cu.usbmodem14201"
 TF_MODULE="https://tfhub.dev/google/imagenet/mobilenet_v2_140_224/feature_vector/3"
 NUM_LEDS=30
+NN_OUTPUT_ORDER_FILE="nn_outputs_order.csv"
+
+print("Reading NN outputs order from %s" % NN_OUTPUT_ORDER_FILE)
+nn_outputs_order = genfromtxt(NN_OUTPUT_ORDER_FILE)
 
 def value_transform(value):
     value -= 0.5
@@ -26,7 +30,7 @@ def send_to_device(device, results):
     message = []
     message.append(255)
     for i in range(NUM_LEDS * 3):
-        value = results[i]
+        value = results[nn_outputs_order[i]]
         message.append(value_transform(value))
 
     message = bytearray(message)
@@ -36,6 +40,8 @@ def send_to_device(device, results):
 def prepare_frame(frame, module):
     frame_height, frame_width, frame_colors = frame.shape
     module_input_height, module_input_width = hub.get_expected_image_size(module)
+    
+    print(module_input_height, module_input_width)
 
     # Crop and scale to be an input for the module.
     frame_square_size = min(frame_height, frame_width)
