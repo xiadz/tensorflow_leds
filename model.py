@@ -15,7 +15,7 @@ NUM_LEDS=30
 NN_OUTPUT_ORDER_FILE="nn_outputs_order.csv"
 
 print("Reading NN outputs order from %s" % NN_OUTPUT_ORDER_FILE)
-nn_outputs_order = genfromtxt(NN_OUTPUT_ORDER_FILE)
+nn_outputs_order = np.genfromtxt(NN_OUTPUT_ORDER_FILE, dtype=int)
 
 def value_transform(value):
     value -= 0.5
@@ -29,9 +29,12 @@ def value_transform(value):
 def send_to_device(device, results):
     message = []
     message.append(255)
-    for i in range(NUM_LEDS * 3):
-        value = results[nn_outputs_order[i]]
-        message.append(value_transform(value))
+    for i in range(NUM_LEDS):
+        for color in range(3):
+            offset = i + color * NUM_LEDS
+            result_index = nn_outputs_order[offset]
+            value = results[result_index]
+            message.append(value_transform(value))
 
     message = bytearray(message)
     device.write(message)
@@ -41,8 +44,6 @@ def prepare_frame(frame, module):
     frame_height, frame_width, frame_colors = frame.shape
     module_input_height, module_input_width = hub.get_expected_image_size(module)
     
-    print(module_input_height, module_input_width)
-
     # Crop and scale to be an input for the module.
     frame_square_size = min(frame_height, frame_width)
     frame_y_offset = (frame_height - frame_square_size) // 2
