@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import os
-os.environ["TFHUB_CACHE_DIR"] = "/Users/mosowski/prog/led_features/tfcache"
+os.environ["TFHUB_CACHE_DIR"] = "./tfcache"
 
 import cv2
 import numpy as np
