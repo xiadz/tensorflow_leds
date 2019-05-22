@@ -33,7 +33,7 @@ def send_to_device(device, results):
     device.write(message)
     device.flush()
 
-def prepare_frame_batch(frame, module):
+def prepare_frame(frame, module):
     frame_height, frame_width, frame_colors = frame.shape
     module_input_height, module_input_width = hub.get_expected_image_size(module)
 
@@ -49,21 +49,21 @@ def prepare_frame_batch(frame, module):
         (module_input_height, module_input_width),
         interpolation=cv2.INTER_CUBIC)
 
-    # Tensorflow expects values between 0.0 and 1.0, and we have
-    # between 0.0 and 255.0
-    frame_scaled = frame_scaled / 255.0
-
-    # Tensorflow needs the data as a batch of size 1.
-    frame_batch = np.expand_dims(frame_scaled, 0)
-
-    return frame_batch
+    return frame_scaled
 
 def single_iteration(device, cap, sess, results_output, frame_placeholder, module):
     ret, frame = cap.read()
     if not ret:
         raise RuntimeError("Couldn't get the image")
 
-    frame_batch = prepare_frame_batch(frame, module)
+    frame_scaled = prepare_frame(frame, module)
+
+    # Tensorflow expects values between 0.0 and 1.0, and we have
+    # between 0.0 and 255.0
+    frame_scaled = frame_scaled / 255.0
+
+    # Tensorflow needs the data as a batch of size 1.
+    frame_batch = np.expand_dims(frame_scaled, 0)
 
     # Run Tensorflow.
     results = sess.run(results_output, feed_dict={frame_placeholder: frame_batch})
