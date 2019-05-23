@@ -9,7 +9,7 @@ import tensorflow_datasets as tfds
 import tensorflow_hub as hub
 import time
 
-TF_MODULE="https://tfhub.dev/google/imagenet/mobilenet_v2_140_224/feature_vector/3"
+TF_MODULE="https://tfhub.dev/google/imagenet/mobilenet_v2_100_96/feature_vector/3"
 DATASET="cifar100"
 OUTPUT_FILE="raw_nn_outputs.csv"
 

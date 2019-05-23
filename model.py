@@ -10,7 +10,7 @@ import tensorflow_hub as hub
 import time
 
 ARDUINO_DEVICE="/dev/cu.usbmodem14201"
-TF_MODULE="https://tfhub.dev/google/imagenet/mobilenet_v2_140_224/feature_vector/3"
+TF_MODULE="https://tfhub.dev/google/imagenet/mobilenet_v2_100_96/feature_vector/3"
 NUM_LEDS=30
 NN_OUTPUT_ORDER_FILE="nn_outputs_order.csv"
 
