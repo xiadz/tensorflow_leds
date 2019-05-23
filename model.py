@@ -18,8 +18,8 @@ print("Reading NN outputs order from %s" % NN_OUTPUT_ORDER_FILE)
 nn_outputs_order = np.genfromtxt(NN_OUTPUT_ORDER_FILE, dtype=int)
 
 def value_transform(value):
-    value -= 0.5
-    value *= 0.3 * 255.0
+    value -= 0.1
+    value *= 0.2 * 255.0
     value = int(value)
     # Capped at 254, not 255, to avoid sending the '\xff' byte
     # in the middle of transmission.
@@ -29,9 +29,9 @@ def value_transform(value):
 def send_to_device(device, results):
     message = []
     message.append(255)
-    for i in range(NUM_LEDS):
+    for i in range(3, NUM_LEDS):
         for color in range(3):
-            offset = i + color * NUM_LEDS
+            offset = i + (color * NUM_LEDS)
             result_index = nn_outputs_order[offset]
             value = results[result_index]
             message.append(value_transform(value))

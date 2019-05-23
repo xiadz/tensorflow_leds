@@ -41,9 +41,9 @@ with open(SORTED_COR_FILE, "w") as f:
 print("Trying to optimize")
 def order_weight(order):
     weight = 0.0
-    for j in range(1, num_nn_outputs):
-        i = j - 1
-        weight += max(1.0 - correlations[order[i], order[j]], 0.0)
+    for j in range(num_nn_outputs):
+        for i in range(max(j - 3, 0), j):
+            weight += max(1.0 - correlations[order[i], order[j]], 0.0)
     return weight
 
 order = random.sample(range(num_nn_outputs), num_nn_outputs);
