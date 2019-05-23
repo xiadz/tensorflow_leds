@@ -7,10 +7,13 @@ import cv2
 import numpy as np
 import tensorflow as tf
 import tensorflow_hub as hub
+import termios
 import time
 
 ARDUINO_DEVICE="/dev/cu.usbmodem14201"
+ARDUINO_COMM_SPEED=115200
 TF_MODULE="https://tfhub.dev/google/imagenet/mobilenet_v2_100_96/feature_vector/3"
+FPS_LIMIT=21.0
 NUM_LEDS=30
 NN_OUTPUT_ORDER_FILE="nn_outputs_order.csv"
 
@@ -27,11 +30,12 @@ def value_transform(value):
     return value
 
 def send_to_device(device, results):
+    next_color_offset = len(results) // 3 + 1;
     message = []
     message.append(255)
     for i in range(3, NUM_LEDS):
         for color in range(3):
-            offset = i + (color * NUM_LEDS)
+            offset = i + (color * next_color_offset)
             result_index = nn_outputs_order[offset]
             value = results[result_index]
             message.append(value_transform(value))
@@ -78,11 +82,6 @@ def single_iteration(device, cap, sess, results_output, frame_placeholder, modul
     # Send data to the device.
     send_to_device(device, results)
 
-    # Print data for the user.
-    for i in range(10):
-        print("%.2f" % results[i], end = ' ')
-    print()
-
 def start_tf(module, cap, device):
     print("Preparing TensorFlow")
     module_input_height, module_input_width = hub.get_expected_image_size(module)
@@ -94,13 +93,33 @@ def start_tf(module, cap, device):
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         print("Running loop")
+        frame_number = 0
+        before_for_fps = time.monotonic()
         while True:
+            before = time.monotonic()
             single_iteration(
                 device, cap, sess, results_output,
                 frame_placeholder, module)
+            frame_number += 1
+            if frame_number % 100 == 0:
+                after_for_fps = time.monotonic()
+                print("FPS: %.1f" % (100.0 / (after_for_fps - before_for_fps)))
+                before_for_fps = time.monotonic()
+            after = time.monotonic()
+            elapsed_time = after - before
+            min_time = 1.0 / FPS_LIMIT
+            if min_time > elapsed_time:
+                time.sleep(min_time - elapsed_time)
 
 def open_port(module, cap):
     with open(ARDUINO_DEVICE, "wb") as device:
+        # Need to set the speed.
+        flags = termios.tcgetattr(device.fileno())
+        flags[4] = ARDUINO_COMM_SPEED
+        flags[5] = ARDUINO_COMM_SPEED
+        termios.tcsetattr(device.fileno(), termios.TCSANOW, flags)
+
+        # Continue with the program.
         start_tf(module, cap, device)
 
 def open_video(module):

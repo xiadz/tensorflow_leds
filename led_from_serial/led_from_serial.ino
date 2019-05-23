@@ -17,10 +17,15 @@
 #define NUM_LEDS 30
 #define DATA_PIN 8
 
+// Speed of the serial port
+#define SERIAL_BAUD 115200
+
 CRGB leds[NUM_LEDS];
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(SERIAL_BAUD);
+  while (!Serial) { }
+
   FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
 }
 
@@ -43,7 +48,7 @@ void update_leds() {
 }
 
 void loop() {
-  int character = Serial.read();
+  int character = blocking_read_char();
   if (character == 255) {
     // New transmission
     update_leds();
