@@ -60,12 +60,23 @@ unsigned long last_show_ms = 0;
 // Time of last serial port status update.
 unsigned long last_status_millis = 0;
 
+void turn_off_leds() {
+  for (int i = 0; i < NUM_LEDS; ++i) {
+    leds[i] = CRGB(0, 0, 0);
+  }
+  FastLED.show();
+}
+
 void setup() {
   Serial.begin(SERIAL_BAUD);
   while (!Serial) { }
 
   // Set up FastLED.
   FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
+
+  // Turn off all LEDs.
+  // Those may be still on from pre-boot time.
+  turn_off_leds();
 
   // Set up next serial port status update.
   last_status_millis = millis();
