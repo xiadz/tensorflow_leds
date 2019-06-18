@@ -11,25 +11,15 @@ import time
 
 import arduino_comm
 import camera_access
+import nn_data_packager
 
 TF_MODULE="https://tfhub.dev/google/imagenet/mobilenet_v2_100_96/feature_vector/3"
-FPS_LIMIT=21.0
-NN_OUTPUT_ORDER_FILE="nn_outputs_order.csv"
+FPS_LIMIT=10.0
+NN_OUTPUT_ORDER_FILE="reordering_outputs/nn_outputs_order.csv"
 
 print("Reading NN outputs order from %s" % NN_OUTPUT_ORDER_FILE)
 nn_outputs_order = np.genfromtxt(NN_OUTPUT_ORDER_FILE, dtype=int)
 
-def reorder_data_for_output(results):
-    output = np.empty_like(results)
-    for i in range(len(results)):
-        output[i] = results[nn_outputs_order[i]]
-    return output
-
-def value_transform(value):
-    value -= 0.1
-    value *= 0.2 * 255.0
-    value = int(value)
-    return value
 
 def single_iteration(device, cap, sess, results_output, frame_placeholder, module):
     module_input_height, module_input_width = hub.get_expected_image_size(module)
@@ -49,11 +39,11 @@ def single_iteration(device, cap, sess, results_output, frame_placeholder, modul
     # Run Tensorflow.
     results = sess.run(results_output, feed_dict={frame_placeholder: frame_batch})
 
-    # Reorder data.
-    results = reorder_data_for_output(results)
+    # Package data.
+    results = nn_data_packager.package_data(results, nn_outputs_order)
 
     # Send data to the device.
-    arduino_comm.send_to_device(device, results)
+    device.send_to_device(results)
 
 def start_tf(module, cap, device):
     print("Preparing TensorFlow")
@@ -88,5 +78,5 @@ def start_tf(module, cap, device):
 print("Loading TensorFlow hub module %s" % TF_MODULE)
 module = hub.Module(TF_MODULE)
 cap = camera_access.open_camera()
-device = arduino_comm.open_arduino_device()
+device = arduino_comm.ArduinoDevice()
 start_tf(module, cap, device)

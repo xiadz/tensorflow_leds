@@ -38,12 +38,37 @@ with open(SORTED_COR_FILE, "w") as f:
 # salesman problem.
 # Using a simple genetic algorithm that swaps two outputs at a time.
 
+outputs_map = np.zeros((16, 16, 3), dtype=np.int32)
+i = 0
+for y in range(16):
+    for x in range(16):
+        for c in range(3):
+            outputs_map[y, x, c] = i
+            i += 1
+
+
 print("Trying to optimize")
 def order_weight(order):
+    def points_weight(point1, point2):
+        return max(1.0 - correlations[order[point1], order[point2]], 0.0)
+
     weight = 0.0
-    for j in range(num_nn_outputs):
-        for i in range(max(j - 3, 0), j):
-            weight += max(1.0 - correlations[order[i], order[j]], 0.0)
+    for y in range(16):
+        for x in range(16):
+            for c in range(3):
+                this_point = outputs_map[y, x, c]
+                if y > 0:
+                    neighbor = outputs_map[y - 1, x, c]
+                    weight += points_weight(this_point, neighbor)
+                if y < 15:
+                    neighbor = outputs_map[y + 1, x, c]
+                    weight += points_weight(this_point, neighbor)
+                if x > 0:
+                    neighbor = outputs_map[y, x - 1, c]
+                    weight += points_weight(this_point, neighbor)
+                if x < 15:
+                    neighbor = outputs_map[y, x + 1, c]
+                    weight += points_weight(this_point, neighbor)
     return weight
 
 order = random.sample(range(num_nn_outputs), num_nn_outputs);

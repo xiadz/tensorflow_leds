@@ -10,11 +10,12 @@
 //     of all the color values.
 
 // Outputs (on the serial port) number of successful
-// and unsuccessful reads.
+// and unsuccessful reads and other stats.
 
-// Please do not use 255 ('\xff') for LED color values,
-// so that this code does not start processing in the middle
-// of the stream.
+// Do not use 255 ('\xff') for LED color values,
+// this code will reject such transmission.
+// This is a simple hack to make it easier to
+// not start processing in the middle of the stream.
 
 // The program applies gamma correction to the LED color
 // values.
@@ -60,6 +61,7 @@ unsigned long last_show_ms = 0;
 // Time of last serial port status update.
 unsigned long last_status_millis = 0;
 
+// Turns off all LEDs.
 void turn_off_leds() {
   for (int i = 0; i < NUM_LEDS; ++i) {
     leds[i] = CRGB(0, 0, 0);
@@ -67,6 +69,7 @@ void turn_off_leds() {
   FastLED.show();
 }
 
+// Arduino setup function.
 void setup() {
   Serial.begin(SERIAL_BAUD);
   while (!Serial) { }
@@ -163,6 +166,9 @@ bool update_leds() {
   return true;
 }
 
+// Attempts to receive a LED colors transmission.
+// Will return immediately if there's no data
+// pending to be read.
 void try_receive() {
   int character = Serial.read();
   if (character != 255) {
@@ -176,6 +182,7 @@ void try_receive() {
   }
 }
 
+// Prints a status update if enough time has passed.
 void maybe_status_update() {
   if (millis() - last_status_millis < STATUS_UPDATE_MS) {
     return;
@@ -194,6 +201,7 @@ void maybe_status_update() {
   last_status_millis = millis();
 }
 
+// Arduino loop.
 void loop() {
   try_receive();
   maybe_status_update();
