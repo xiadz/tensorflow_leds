@@ -78,7 +78,9 @@ print("Initial weight:", initial_weight)
 weight = initial_weight
 for step, temperature in enumerate(np.logspace(5.0, 0.0, num=OPTIMIZATION_STEPS)):
     if step % 1000 == 0:
-        print("temperature: %.1f, order weight: %.1f" % (temperature, weight))
+        progress_pcent = step / OPTIMIZATION_STEPS * 100.0
+        print("temperature: %.1f, order weight: %.1f, progress: %.1f %%" % (
+            temperature, weight, progress_pcent))
     i, j = sorted(random.sample(range(num_nn_outputs), 2))
     new_order =  order[:i] + order[j:j+1] +  order[i+1:j] + order[i:i+1] + order[j+1:];
     new_weight = order_weight(new_order)
