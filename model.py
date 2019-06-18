@@ -7,67 +7,37 @@ import cv2
 import numpy as np
 import tensorflow as tf
 import tensorflow_hub as hub
-import termios
 import time
 
-ARDUINO_DEVICE="/dev/cu.usbmodem14201"
-ARDUINO_COMM_SPEED=115200
+import arduino_comm
+import camera_access
+
 TF_MODULE="https://tfhub.dev/google/imagenet/mobilenet_v2_100_96/feature_vector/3"
 FPS_LIMIT=21.0
-NUM_LEDS=30
 NN_OUTPUT_ORDER_FILE="nn_outputs_order.csv"
 
 print("Reading NN outputs order from %s" % NN_OUTPUT_ORDER_FILE)
 nn_outputs_order = np.genfromtxt(NN_OUTPUT_ORDER_FILE, dtype=int)
 
+def reorder_data_for_output(results):
+    output = np.empty_like(results)
+    for i in range(len(results)):
+        output[i] = results[nn_outputs_order[i]]
+    return output
+
 def value_transform(value):
     value -= 0.1
     value *= 0.2 * 255.0
     value = int(value)
-    # Capped at 254, not 255, to avoid sending the '\xff' byte
-    # in the middle of transmission.
-    value = max(min(value, 254), 0)
     return value
 
-def send_to_device(device, results):
-    next_color_offset = len(results) // 3 + 1;
-    message = []
-    message.append(255)
-    for i in range(3, NUM_LEDS):
-        for color in range(3):
-            offset = i + (color * next_color_offset)
-            result_index = nn_outputs_order[offset]
-            value = results[result_index]
-            message.append(value_transform(value))
-
-    message = bytearray(message)
-    device.write(message)
-    device.flush()
-
-def prepare_frame(frame, module):
-    frame_height, frame_width, frame_colors = frame.shape
-    module_input_height, module_input_width = hub.get_expected_image_size(module)
-    
-    # Crop and scale to be an input for the module.
-    frame_square_size = min(frame_height, frame_width)
-    frame_y_offset = (frame_height - frame_square_size) // 2
-    frame_x_offset = (frame_width - frame_square_size) // 2
-    frame_cropped = frame[
-        frame_y_offset:frame_y_offset + frame_square_size,
-        frame_x_offset:frame_x_offset + frame_square_size]
-    frame_scaled = cv2.resize(
-        frame_cropped,
-        (module_input_height, module_input_width),
-        interpolation=cv2.INTER_CUBIC)
-
-    return frame_scaled
-
 def single_iteration(device, cap, sess, results_output, frame_placeholder, module):
-    ret, frame = cap.read()
-    if not ret:
-        raise RuntimeError("Couldn't get the image")
+    module_input_height, module_input_width = hub.get_expected_image_size(module)
 
-    frame_scaled = prepare_frame(frame, module)
+    frame = camera_access.get_camera_frame(cap)
+    frame_squared = camera_access.square_frame(frame)
+    frame_scaled = camera_access.scale_frame(
+        frame, module_input_height, module_input_width)
 
     # Tensorflow expects values between 0.0 and 1.0, and we have
     # between 0.0 and 255.0
@@ -79,8 +49,11 @@ def single_iteration(device, cap, sess, results_output, frame_placeholder, modul
     # Run Tensorflow.
     results = sess.run(results_output, feed_dict={frame_placeholder: frame_batch})
 
+    # Reorder data.
+    results = reorder_data_for_output(results)
+
     # Send data to the device.
-    send_to_device(device, results)
+    arduino_comm.send_to_device(device, results)
 
 def start_tf(module, cap, device):
     print("Preparing TensorFlow")
@@ -111,25 +84,9 @@ def start_tf(module, cap, device):
             if min_time > elapsed_time:
                 time.sleep(min_time - elapsed_time)
 
-def open_port(module, cap):
-    with open(ARDUINO_DEVICE, "wb") as device:
-        # Need to set the speed.
-        flags = termios.tcgetattr(device.fileno())
-        flags[4] = ARDUINO_COMM_SPEED
-        flags[5] = ARDUINO_COMM_SPEED
-        termios.tcsetattr(device.fileno(), termios.TCSANOW, flags)
-
-        # Continue with the program.
-        start_tf(module, cap, device)
-
-def open_video(module):
-    print("Initializing video input")
-    cap = cv2.VideoCapture(0)
-    try:
-        open_port(module, cap)
-    finally:
-        cap.release()
 
 print("Loading TensorFlow hub module %s" % TF_MODULE)
 module = hub.Module(TF_MODULE)
-open_video(module)
+cap = camera_access.open_camera()
+device = arduino_comm.open_arduino_device()
+start_tf(module, cap, device)

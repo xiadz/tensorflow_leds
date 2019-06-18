@@ -1,5 +1,7 @@
 .*.swp
+.DS_Store
 tfcache
+__pycache__
 
 sorted_correlations.csv
 raw_nn_outputs.csv

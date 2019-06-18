@@ -1,34 +1,105 @@
-// A simple tool to light up LEDs according to what's sent
-// on the input.
+// A simple tool to light up a strip or matrix of LEDs according
+// to what's sent on the serial input.
 //
 // Protocol:
-//   \xff as the start byte
-//   Then raw byte values for R, G, B on LED0
-//   Then raw byte values for R, G, B on LED1
-//   and so on.
+//   - \xff as the start byte
+//   - Then raw byte values for R, G, B on LED0
+//     - Then raw byte values for R, G, B on LED1
+//     - and so on.
+//   - Finally, a checksum byte, which is a uint8_t sum
+//     of all the color values.
+
+// Outputs (on the serial port) number of successful
+// and unsuccessful reads.
 
 // Please do not use 255 ('\xff') for LED color values,
 // so that this code does not start processing in the middle
 // of the stream.
 
+// The program applies gamma correction to the LED color
+// values.
+
 #include <FastLED.h>
 
-// There's 60 LEDs on the strip.
-#define NUM_LEDS 30
+// There's 16*16 LEDs in the matrix.
+#define NUM_LEDS (16*16)
+
+// LEDs are at pin 8.
 #define DATA_PIN 8
 
-// Speed of the serial port
-#define SERIAL_BAUD 115200
+// Speed of the serial port.
+#define SERIAL_BAUD 230400
 
+// Whether to enable gamma correction.
+#define ENABLE_GAMMA_CORRECTION true
+
+// A division constant for all RGB values.
+// Applied after gamma correction.
+// This is here mostly to not burn the LED
+// strip/matrix with excessive power.
+#define DIVIDE_ALL_COLORS 2
+
+// How often should status updates be printed.
+#define STATUS_UPDATE_MS (30 * 1000)
+
+// Keeps all RGB values to be written to LEDs.
 CRGB leds[NUM_LEDS];
+
+// How many receives were successful.
+uint32_t successful_rcvs = 0;
+
+// How many receives were failed.
+uint32_t failed_rcvs = 0;
+
+// Time (in ms) of last successful serial port read.
+unsigned long last_data_read_ms = 0;
+
+// Time (in ms) of last successful FastLED show().
+unsigned long last_show_ms = 0;
+
+// Time of last serial port status update.
+unsigned long last_status_millis = 0;
 
 void setup() {
   Serial.begin(SERIAL_BAUD);
   while (!Serial) { }
 
+  // Set up FastLED.
   FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
+
+  // Set up next serial port status update.
+  last_status_millis = millis();
 }
 
+// Gamma correction table for the LEDs.
+const uint8_t PROGMEM gamma8[] = {
+    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  1,  1,  1,
+    1,  1,  1,  1,  1,  1,  1,  1,  1,  2,  2,  2,  2,  2,  2,  2,
+    2,  3,  3,  3,  3,  3,  3,  3,  4,  4,  4,  4,  4,  5,  5,  5,
+    5,  6,  6,  6,  6,  7,  7,  7,  7,  8,  8,  8,  9,  9,  9, 10,
+   10, 10, 11, 11, 11, 12, 12, 13, 13, 13, 14, 14, 15, 15, 16, 16,
+   17, 17, 18, 18, 19, 19, 20, 20, 21, 21, 22, 22, 23, 24, 24, 25,
+   25, 26, 27, 27, 28, 29, 29, 30, 31, 32, 32, 33, 34, 35, 35, 36,
+   37, 38, 39, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 50,
+   51, 52, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 66, 67, 68,
+   69, 70, 72, 73, 74, 75, 77, 78, 79, 81, 82, 83, 85, 86, 87, 89,
+   90, 92, 93, 95, 96, 98, 99,101,102,104,105,107,109,110,112,114,
+  115,117,119,120,122,124,126,127,129,131,133,135,137,138,140,142,
+  144,146,148,150,152,154,156,158,160,162,164,167,169,171,173,175,
+  177,180,182,184,186,189,191,193,196,198,200,203,205,208,210,213,
+  215,218,220,223,225,228,231,233,236,239,241,244,247,249,252,255 };
+
+// Gamma corrects a single value.
+uint8_t gamma_correct(uint8_t input) {
+  if (ENABLE_GAMMA_CORRECTION) {
+    return pgm_read_byte(&gamma8[input]);
+  }
+  return input;
+}
+
+// Blocks until a new character is available
+// on the serial port, and returns that character.
 uint8_t blocking_read_char() {
   int character;
   do {
@@ -37,20 +108,82 @@ uint8_t blocking_read_char() {
   return character;
 }
 
-void update_leds() {
+// Read LEDs setup from the serial port and write
+// the configuration to the LED matrix/strip.
+//
+// Will abort if byte 255 is found in the middle
+// of the transmission, or if the checksum does
+// not match.
+//
+// Returns true if data was received correctly and
+// pushed to the LEDs, and false otherwise.
+bool update_leds() {
+  const unsigned long read_start_millis = millis();
+  uint8_t computed_checksum = 0;
   for (int i = 0; i < NUM_LEDS; ++i) {
     const uint8_t r = blocking_read_char();
+    computed_checksum += r;
     const uint8_t g = blocking_read_char();
+    computed_checksum += g;
     const uint8_t b = blocking_read_char();
-    leds[i] = CRGB(r, g, b);
+    computed_checksum += b;
+    if (r == 255 || g == 255 || b == 255) {
+      // Illegal byte.
+      return false;
+    }
+    leds[i] = CRGB(
+      gamma_correct(r) / DIVIDE_ALL_COLORS,
+      gamma_correct(g) / DIVIDE_ALL_COLORS,
+      gamma_correct(b) / DIVIDE_ALL_COLORS);
   }
+  const uint8_t checksum = blocking_read_char();
+  if (checksum != computed_checksum) {
+    // Bad checksum.
+    return false;
+  }
+
+  // Read was successful.
+  last_data_read_ms = millis() - read_start_millis;
+
+  const unsigned long show_start_millis = millis();
   FastLED.show();
+  last_show_ms = millis() - show_start_millis;
+
+  return true;
+}
+
+void try_receive() {
+  int character = Serial.read();
+  if (character != 255) {
+    return;
+  }
+  // New transmission
+  if (update_leds()) {
+    successful_rcvs++;
+  } else {
+    failed_rcvs++;
+  }
+}
+
+void maybe_status_update() {
+  if (millis() - last_status_millis < STATUS_UPDATE_MS) {
+    return;
+  }
+
+  Serial.print("successful_rcvs:");
+  Serial.println(successful_rcvs);
+  Serial.print("failed_rcvs:");
+  Serial.println(failed_rcvs);
+
+  Serial.print("last_data_read_ms:");
+  Serial.println(last_data_read_ms);
+  Serial.print("last_show_ms:");
+  Serial.println(last_show_ms);
+
+  last_status_millis = millis();
 }
 
 void loop() {
-  int character = blocking_read_char();
-  if (character == 255) {
-    // New transmission
-    update_leds();
-  }
+  try_receive();
+  maybe_status_update();
 }
