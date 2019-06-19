@@ -26,6 +26,10 @@
 
 #include <FastLED.h>
 
+//
+// Constants.
+//
+
 // There's 16*16 LEDs in the matrix.
 #define NUM_LEDS (16*16)
 
@@ -47,8 +51,16 @@
 // How often should status updates be printed.
 #define STATUS_UPDATE_MS (30 * 1000)
 
+//
+// LEDs.
+//
+
 // Keeps all RGB values to be written to LEDs.
 CRGB leds[NUM_LEDS];
+
+//
+// Runtime statistics.
+//
 
 // How many receives were successful.
 uint32_t successful_rcvs = 0;
@@ -61,6 +73,10 @@ unsigned long last_data_read_ms = 0;
 
 // Time (in ms) of last successful FastLED show().
 unsigned long last_show_ms = 0;
+
+//
+// Variables for handling status printing.
+//
 
 // Time of last serial port status update.
 unsigned long last_status_millis = 0;
@@ -208,6 +224,9 @@ void maybe_status_update() {
   Serial.println(last_data_read_ms);
   Serial.print("last_show_ms:");
   Serial.println(last_show_ms);
+
+  Serial.print("millis:");
+  Serial.println(millis());
 
   last_status_millis = millis();
 }

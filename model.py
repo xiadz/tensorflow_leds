@@ -3,18 +3,16 @@
 import os
 os.environ["TFHUB_CACHE_DIR"] = "./tfcache"
 
-import cv2
 import numpy as np
 import tensorflow as tf
 import tensorflow_hub as hub
-import time
 
 import arduino_comm
 import camera_access
+import fps_tools
 import nn_data_packager
 
 TF_MODULE="https://tfhub.dev/google/imagenet/mobilenet_v2_100_96/feature_vector/3"
-FPS_LIMIT=10.0
 NN_OUTPUT_ORDER_FILE="reordering_outputs/nn_outputs_order.csv"
 
 print("Reading NN outputs order from %s" % NN_OUTPUT_ORDER_FILE)
@@ -56,23 +54,14 @@ def start_tf(module, cap, device):
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         print("Running loop")
-        frame_number = 0
-        before_for_fps = time.monotonic()
+        fps_meter = fps_tools.FPSMeter()
+        fps_limiter = fps_tools.FPSLimiter()
         while True:
-            before = time.monotonic()
             single_iteration(
                 device, cap, sess, results_output,
                 frame_placeholder, module)
-            frame_number += 1
-            if frame_number % 100 == 0:
-                after_for_fps = time.monotonic()
-                print("FPS: %.1f" % (100.0 / (after_for_fps - before_for_fps)))
-                before_for_fps = time.monotonic()
-            after = time.monotonic()
-            elapsed_time = after - before
-            min_time = 1.0 / FPS_LIMIT
-            if min_time > elapsed_time:
-                time.sleep(min_time - elapsed_time)
+            fps_limiter.frame_completed()
+            fps_meter.frame_completed()
 
 
 print("Loading TensorFlow hub module %s" % TF_MODULE)

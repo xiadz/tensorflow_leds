@@ -2,13 +2,13 @@
 
 import colorsys
 import numpy as np
-import time
 
 import arduino_comm
-import fps_meter
+import fps_tools
 
 device = arduino_comm.ArduinoDevice()
-fps_meter = fps_meter.FPSMeter()
+fps_meter = fps_tools.FPSMeter()
+fps_limiter = fps_tools.FPSLimiter()
 
 center = -0.7453 + 0.1127j
 zoom = 20.0
@@ -48,4 +48,5 @@ while True:
     device.send_to_device(frame)
     fps_meter.frame_completed()
 
-    time.sleep(0.1)
+    fps_limiter.frame_completed()
+    fps_meter.frame_completed()
