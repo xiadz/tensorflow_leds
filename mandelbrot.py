@@ -46,7 +46,6 @@ while True:
     zoom *= zoom_per_frame
     frame = compute_mandelbrot(center, zoom)
     device.send_to_device(frame)
-    fps_meter.frame_completed()
 
     fps_limiter.frame_completed()
     fps_meter.frame_completed()
