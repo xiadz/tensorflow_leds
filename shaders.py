@@ -12,28 +12,41 @@ device = arduino_comm.ArduinoDevice()
 fps_meter = fps_tools.FPSMeter()
 fps_limiter = fps_tools.FPSLimiter()
 
-def compute_shader_xy(t, x, y):
+def flower_shader(t, x, y):
     r = math.sqrt(x**2.0 + y**2.0)
+    theta = math.atan2(y, x)
+
     hue = 0.0
-    hue += t * -0.5
-    hue += r * 2.0
+    hue += 1.0 * r
     hue %= 1.0
 
     saturation = 1.0
 
-    value = (math.sin(5.0 * r - 5.0 * t) + 1.0) * 0.5
+    if r < 0.25:
+        value = 1.0
+    elif r > 1.2:
+        value = 0.0
+    else:
+        flower_speed = 10.0
+        flower_leaves = 5
+        value_angle = 0.0
+        value_angle += (flower_speed / 2.0) * r
+        value_angle += -flower_speed * t
+        value_angle += flower_leaves * theta
+        value = (math.sin(value_angle) + 1.0) * 0.5
+
     value *=  0.5
 
     return colorsys.hsv_to_rgb(hue, saturation, value)
 
-def compute_shader(time_sec):
+def compute_shader(time_sec, shader):
     frame = np.zeros((16, 16, 3))
     dx = 2.0 / 15.0
     for y in range(16):
         for x in range(16):
             point_x = (x - 7.5) * dx
             point_y = (y - 7.5) * dx
-            frame[y, x] = compute_shader_xy(time_sec, point_x, point_y)
+            frame[y, x] = shader(time_sec, point_x, point_y)
     return frame
 
 def floats_to_uints(frame_floats):
@@ -48,7 +61,7 @@ def floats_to_uints(frame_floats):
 
 while True:
     time_sec = time.monotonic()
-    frame_floats = compute_shader(time_sec)
+    frame_floats = compute_shader(time_sec, flower_shader)
     frame = floats_to_uints(frame_floats)
     device.send_to_device(frame)
 
