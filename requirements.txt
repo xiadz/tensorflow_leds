@@ -3,3 +3,4 @@ tensorflow_hub == 0.4.0
 tensorflow_datasets == 1.0.2
 opencv-python >= 4.1.0
 numpy >= 1.15.4
+pyserial >= 3.4

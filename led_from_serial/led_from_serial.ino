@@ -11,6 +11,9 @@
 
 // Outputs (on the serial port) number of successful
 // and unsuccessful reads and other stats.
+// It also flips the LED_BUILTIN on
+// on a failed receive (cleared soon after; errors
+// result in chaotic blinking).
 
 // Do not use 255 ('\xff') for LED color values,
 // this code will reject such transmission.
@@ -19,6 +22,7 @@
 
 // The program applies gamma correction to the LED color
 // values.
+
 
 #include <FastLED.h>
 
@@ -74,6 +78,10 @@ void setup() {
   Serial.begin(SERIAL_BAUD);
   while (!Serial) { }
 
+  // Set up the built in LED.
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, LOW);
+
   // Set up FastLED.
   FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
 
@@ -115,11 +123,8 @@ uint8_t gamma_correct(uint8_t input) {
 // Blocks until a new character is available
 // on the serial port, and returns that character.
 uint8_t blocking_read_char() {
-  int character;
-  do {
-    character = Serial.read();
-  } while(character == -1);
-  return character;
+  while(Serial.available() == 0) { }
+  return Serial.read();
 }
 
 // Read LEDs setup from the serial port and write
@@ -170,15 +175,21 @@ bool update_leds() {
 // Will return immediately if there's no data
 // pending to be read.
 void try_receive() {
-  int character = Serial.read();
+  const int character = Serial.read();
   if (character != 255) {
     return;
   }
+
+  // Clear the error LED.
+  digitalWrite(LED_BUILTIN, LOW);
+
   // New transmission
   if (update_leds()) {
     successful_rcvs++;
   } else {
     failed_rcvs++;
+    // Enable the error LED.
+    digitalWrite(LED_BUILTIN, HIGH);
   }
 }
 

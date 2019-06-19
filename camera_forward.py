@@ -13,6 +13,7 @@ device = arduino_comm.ArduinoDevice()
 cap = camera_access.open_camera()
 fps_meter = fps_meter.FPSMeter()
 
+print("Running ...")
 while True:
     frame = camera_access.get_camera_frame(cap)
     frame = camera_access.square_frame(frame)

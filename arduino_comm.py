@@ -1,11 +1,11 @@
 import numpy as np
-import termios
+import serial
 import threading
 
 ARDUINO_DEVICE="/dev/cu.usbserial-1420"
 # With 16*16*3 bytes to transfer each message is 771
-# bytes long, and therefore should take around 26.7 msec
-# to transfer over the serial port (at 230.4k baud).
+# bytes long, and therefore should take around 30 msec
+# to transfer over the serial port (at 230.4k baud, 8N1).
 ARDUINO_COMM_SPEED=230400
 NUM_LEDS_HEIGHT=16
 NUM_LEDS_WIDTH=16
@@ -16,27 +16,26 @@ class ArduinoDevice(object):
 
     def __init__(self):
         """Opens Arduino device controlling the LEDs."""
-        print("Opening Arduino at", ARDUINO_DEVICE,
-              "baud:", ARDUINO_COMM_SPEED)
-        self.device = open(ARDUINO_DEVICE, "wb")
-        self._set_speeds(self.device)
-        self.device_status = open(ARDUINO_DEVICE, "r")
-        self._set_speeds(self.device_status)
+        print("Opening Arduino at", ARDUINO_DEVICE)
+        self.device = serial.Serial(
+            ARDUINO_DEVICE, baudrate=ARDUINO_COMM_SPEED)
+        assert self.device.isOpen()
+
+        # Print settings.
+        print("Opened, serial port settings:")
+        for k, v in self.device.get_settings().items():
+            print("  %s: %s" % (str(k), str(v)))
+        # baudrates_str = ", ".join(map(str, self.device.BAUDRATES))
+        # print("All supported baudrates:", baudrates_str)
 
         self.status_reader_thread = threading.Thread(
             target=self._status_reader_loop)
         self.status_reader_thread.setDaemon(True)
         self.status_reader_thread.start()
 
-    def _set_speeds(self, handler):
-        flags = termios.tcgetattr(handler.fileno())
-        flags[4] = ARDUINO_COMM_SPEED
-        flags[5] = ARDUINO_COMM_SPEED
-        termios.tcsetattr(handler.fileno(), termios.TCSANOW, flags)
-
     def _status_reader_loop(self):
         while True:
-            line = self.device_status.readline()
+            line = self.device.readline()
             line = line.strip()
             if line:
                 print("Arduino status:", line)
