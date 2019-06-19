@@ -20,7 +20,7 @@ class FPSLimiter(object):
     """A class to limit FPS."""
     def __init__(self):
         self._before = time.monotonic()
-        self._fps_limit = 10.0
+        self._fps_limit = 15.0
         self._min_time = 1.0 / self._fps_limit
 
     def frame_completed(self):

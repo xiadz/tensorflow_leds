@@ -63,23 +63,17 @@ CRGB leds[NUM_LEDS];
 //
 
 // How many receives were successful.
-uint32_t successful_rcvs = 0;
+uint32_t total_successful_rcvs = 0;
 
 // How many receives were failed.
-uint32_t failed_rcvs = 0;
+uint32_t total_failed_rcvs = 0;
 
 // Time (in ms) of last successful serial port read.
-unsigned long last_data_read_ms = 0;
+unsigned long last_serial_read_ms = 0;
 
 // Time (in ms) of last successful FastLED show().
 unsigned long last_show_ms = 0;
 
-//
-// Variables for handling status printing.
-//
-
-// Time of last serial port status update.
-unsigned long last_status_millis = 0;
 
 // Turns off all LEDs.
 void turn_off_leds() {
@@ -104,9 +98,6 @@ void setup() {
   // Turn off all LEDs.
   // Those may be still on from pre-boot time.
   turn_off_leds();
-
-  // Set up next serial port status update.
-  last_status_millis = millis();
 }
 
 // Gamma correction table for the LEDs.
@@ -178,7 +169,7 @@ bool update_leds() {
   }
 
   // Read was successful.
-  last_data_read_ms = millis() - read_start_millis;
+  last_serial_read_ms = millis() - read_start_millis;
 
   const unsigned long show_start_millis = millis();
   FastLED.show();
@@ -201,9 +192,9 @@ void try_receive() {
 
   // New transmission
   if (update_leds()) {
-    successful_rcvs++;
+    total_successful_rcvs++;
   } else {
-    failed_rcvs++;
+    total_failed_rcvs++;
     // Enable the error LED.
     digitalWrite(LED_BUILTIN, HIGH);
   }
@@ -211,24 +202,55 @@ void try_receive() {
 
 // Prints a status update if enough time has passed.
 void maybe_status_update() {
+  // Time of last serial port status update.
+  static unsigned long last_status_millis = 0;
+
+  if (last_status_millis == 0) {
+    // First entrance.
+    last_status_millis = millis();
+    return;
+  }
+
   if (millis() - last_status_millis < STATUS_UPDATE_MS) {
     return;
   }
 
-  Serial.print("successful_rcvs:");
-  Serial.println(successful_rcvs);
-  Serial.print("failed_rcvs:");
-  Serial.println(failed_rcvs);
 
-  Serial.print("last_data_read_ms:");
-  Serial.println(last_data_read_ms);
-  Serial.print("last_show_ms:");
+  // Last value of receives.
+  // Used to compute FPS.
+  static uint32_t last_successful_rcvs = 0;
+  static uint32_t last_failed_rcvs = 0;
+
+  // Compute FPS.
+  const unsigned long time_since_last = millis() - last_status_millis;
+  const float successful_fps =
+    (float)(total_successful_rcvs - last_successful_rcvs) /
+    (float)(time_since_last) * 1000.0f;
+  const float failed_fps =
+    (float)(total_failed_rcvs - last_failed_rcvs) /
+    (float)(time_since_last) * 1000.0f;
+
+  Serial.print("Successful receives FPS: ");
+  Serial.println(successful_fps);
+  Serial.print("Failed receives FPS: ");
+  Serial.println(failed_fps);
+
+  Serial.print("Total successful receives: ");
+  Serial.println(total_successful_rcvs);
+  Serial.print("Total failed receives: ");
+  Serial.println(total_failed_rcvs);
+
+  Serial.print("Last serial read latency [ms]: ");
+  Serial.println(last_serial_read_ms);
+  Serial.print("Last LED show latency [ms]: ");
   Serial.println(last_show_ms);
 
   Serial.print("millis:");
   Serial.println(millis());
 
   last_status_millis = millis();
+  last_successful_rcvs = total_successful_rcvs;
+  last_failed_rcvs = total_failed_rcvs;
 }
 
 // Arduino loop.
